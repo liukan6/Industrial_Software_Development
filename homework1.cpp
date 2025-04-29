@@ -32,6 +32,12 @@ void displayDebtors(const Library& lib);
 
 #endif // LIBRARY_SYSTEM_H
 
+// 获取当前年份的独立工具函数
+int getCurrentYear() {
+    std::time_t t = std::time(nullptr);  // 获取当前时间
+    std::tm* now = std::localtime(&t);   // 转换为本地时间结构
+    return (now->tm_year + 1900);        // tm_year是从1900开始的年数
+}
 
 // 书籍枚举类型
 enum class Genre {
@@ -336,33 +342,102 @@ void addBookMenu(Library& lib) {
     int year, genreChoice;
     
     std::cout << "\n=== 添加新书 ===\n";
-    std::cout << "ISBN(格式n-n-n-x): ";
-    std::getline(std::cin, isbn);
     
+    // 1. 先输入并验证ISBN
+    while (true) {
+        std::cout << "ISBN(格式n-n-n-x，输入q退出): ";
+        std::getline(std::cin, isbn);
+        
+        if (isbn == "q") {
+            std::cout << "已取消添加书籍\n";
+            return;
+        }
+        
+        // 创建临时Book对象验证ISBN
+        try {
+            Book tempBook(isbn, "", "", 0, Genre::fiction); // 会触发ISBN验证
+            break; // 如果没抛出异常，说明ISBN有效
+        } catch (const std::invalid_argument& e) {
+            std::cerr << "错误: " << e.what() << "\n";
+            std::cerr << "请重新输入或输入q退出\n";
+        }
+    }
+    
+    // 2. ISBN验证通过后，继续输入其他信息
     std::cout << "书名: ";
     std::getline(std::cin, title);
     
     std::cout << "作者: ";
     std::getline(std::cin, author);
     
-    std::cout << "出版年份: ";
-    std::cin >> year;
-    std::cin.ignore();
-    
-    std::cout << "类型(1.小说 2.非小说 3.期刊 4.传记 5.儿童): ";
-    std::cin >> genreChoice;
-    std::cin.ignore();
-    
-    Genre genre;
-    switch(genreChoice) {
-        case 1: genre = Genre::fiction; break;
-        case 2: genre = Genre::nonfiction; break;
-        case 3: genre = Genre::periodical; break;
-        case 4: genre = Genre::biography; break;
-        case 5: genre = Genre::children; break;
-        default: throw std::invalid_argument("无效的类型选择");
+    // 3. 输入年份（带验证）
+    while (true) {
+        int currentYear = getCurrentYear();
+        std::cout << "出版年份(1-" << currentYear << "，输入q退出): ";
+        
+        // 先读取为字符串检查是否为空或q
+        std::string input;
+        std::getline(std::cin, input);
+        
+        // 允许用户取消输入
+        if (input == "q") {
+            std::cout << "已取消添加书籍\n";
+            return; // 或做其他取消处理
+        }
+        
+        // 尝试转换为数字
+        try {
+            size_t pos;
+            year = std::stoi(input, &pos);
+            
+            // 检查是否整个字符串都被转换了
+            if (pos != input.length()) {
+                throw std::invalid_argument("包含非数字字符");
+            }
+            
+            // 验证年份范围
+            if (year > 0 && year <= currentYear) {
+                break;
+            }
+            std::cerr << "无效的年份，请输入1-" << currentYear << "之间的数字或输入q取消\n";
+        } catch (...) {
+            std::cerr << "请输入有效的数字年份(1-" << currentYear << ")或输入q取消\n";
+        }
     }
     
+    // 4. 输入类型（带验证）
+    while (true) {
+        std::cout << "选择类型(1.小说 2.非小说 3.期刊 4.传记 5.儿童，输入q退出): ";
+        
+        std::string input;
+        std::getline(std::cin, input);
+        
+        // 允许用户取消
+        if (input == "q") {
+            std::cout << "已取消添加书籍\n";
+            return;
+        }
+        
+        try {
+            size_t pos;
+            genreChoice = std::stoi(input, &pos);
+            
+            // 检查是否整个字符串都是数字
+            if (pos != input.length()) {
+                throw std::invalid_argument("包含非数字字符");
+            }
+            
+            if (genreChoice >= 1 && genreChoice <= 5) {
+                break;
+            }
+            std::cerr << "无效的选择，请输入1-5之间的数字或输入q退出\n";
+        } catch (...) {
+            std::cerr << "请输入1-5之间的有效数字或输入q退出\n";
+        }
+    }
+    
+    // 5. 创建并添加书籍
+    Genre genre = static_cast<Genre>(genreChoice - 1);
     lib.addBook(Book(isbn, title, author, year, genre));
     std::cout << "\n【成功】《" << title << "》已添加到图书馆！\n";
 }
@@ -374,27 +449,95 @@ void addPatronMenu(Library& lib) {
     double fees = 0.0;
     
     std::cout << "\n=== 添加新读者 ===\n";
-    std::cout << "姓名: ";
+    
+    // 1. 输入姓名
+    std::cout << "姓名(输入q退出): ";
     std::getline(std::cin, name);
-    
-    std::cout << "借书证号: ";
-    std::cin >> cardNumber;
-    std::cin.ignore();
-    
-    std::cout << "欠费金额(默认0): ";
-    std::string feeInput;
-    std::getline(std::cin, feeInput);
-    if (!feeInput.empty()) {
-        fees = std::stod(feeInput);
+    if (name == "q") {
+        std::cout << "已取消添加读者\n";
+        return;
     }
-    
+
+    // 2. 输入借书证号（带验证）
+    while (true) {
+        std::cout << "借书证号(必须为正整数，输入q退出): ";
+        std::string cardInput;
+        std::getline(std::cin, cardInput);
+        
+        if (cardInput == "q") {
+            std::cout << "已取消添加读者\n";
+            return;
+        }
+        
+        try {
+            size_t pos;
+            cardNumber = std::stoi(cardInput, &pos);
+            
+            // 检查是否整个字符串都是数字
+            if (pos != cardInput.length()) {
+                throw std::invalid_argument("包含非数字字符");
+            }
+            
+            // 检查是否为正值
+            if (cardNumber <= 0) {
+                throw std::invalid_argument("证号必须为正数");
+            }
+            
+            break; // 输入有效，退出循环
+        } catch (...) {
+            std::cerr << "错误：请输入有效的正整数借书证号\n";
+        }
+    }
+
+    // 3. 输入欠费金额（带验证）
+    while (true) {
+        std::cout << "欠费金额(默认0，输入q退出): ";
+        std::string feeInput;
+        std::getline(std::cin, feeInput);
+        
+        if (feeInput == "q") {
+            std::cout << "已取消添加读者\n";
+            return;
+        }
+        
+        // 允许直接回车使用默认值0
+        if (feeInput.empty()) {
+            fees = 0.0;
+            break;
+        }
+        
+        try {
+            size_t pos;
+            fees = std::stod(feeInput, &pos);
+            
+            // 检查是否整个字符串都是有效数字
+            if (pos != feeInput.length()) {
+                throw std::invalid_argument("包含非法字符");
+            }
+            
+            // 检查是否为非负数
+            if (fees < 0) {
+                throw std::invalid_argument("欠费金额不能为负数");
+            }
+            
+            break; // 输入有效，退出循环
+        } catch (...) {
+            std::cerr << "错误：请输入有效的非负数字(如12.5)，或直接回车默认为0\n";
+        }
+    }
+
+    // 4. 创建并添加读者
     Patron patron(name, cardNumber);
     if (fees > 0) {
         patron.setFees(fees);
     }
     
     lib.addPatron(patron);
-    std::cout << "\n【成功】读者 " << name << " 已注册！\n";
+    std::cout << "\n【成功】读者 " << name << " (证号:" << cardNumber << ") 已注册！";
+    if (fees > 0) {
+        std::cout << " 欠费:" << fees << "元";
+    }
+    std::cout << "\n";
 }
 
 // 借书菜单
